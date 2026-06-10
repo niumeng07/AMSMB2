@@ -40,6 +40,8 @@ let package = Package(
                 "lib/Makefile.AMIGA_OS3",
                 "lib/Makefile.PS3_PPU",
                 "lib/ps2",
+                "lib/dreamcast",
+                "lib/dreamcast/vfs.c",
             ],
             sources: [
                 "lib",

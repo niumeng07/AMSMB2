@@ -26,12 +26,16 @@ extension Array where Element == SMB2Share {
     init(_ client: SMB2Client, _ dataPtr: UnsafeMutableRawPointer?) throws {
         defer { smb2_free_data(client.context, dataPtr) }
         let result = try dataPtr.unwrap().assumingMemoryBound(to: srvsvc_NetrShareEnum_rep.self).pointee
-        self = Array(result.ses.ShareInfo.Level1.Buffer.pointee)
+        self = Array(result.ses.ShareInfo.Level1)
     }
 
-    init(_ ctr1: srvsvc_SHARE_INFO_1_carray) {
+    init(_ ctr1: srvsvc_SHARE_INFO_1_CONTAINER) {
+        guard let shareInfo = ctr1.share_info_1 else {
+            self = []
+            return
+        }
         self = [srvsvc_SHARE_INFO_1](
-            UnsafeBufferPointer(start: ctr1.share_info_1, count: Int(ctr1.max_count))
+            UnsafeBufferPointer(start: shareInfo, count: Int(ctr1.EntriesRead))
         ).map {
             SMB2Share(
                 name: .init(cString: $0.netname.utf8),
