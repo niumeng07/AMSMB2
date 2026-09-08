@@ -30,14 +30,16 @@ final class SMB2Client: CustomDebugStringConvertible, CustomReflectable, @unchec
     }
 
     deinit {
-        guard context != nil else { return }
-        if isActive {
-            try? self.disconnect()
-        }
-        try? withThreadSafeContext { context in
-            self.context = nil
-            smb2_destroy_context(context)
-        }
+        invalidateContext()
+    }
+
+    /// Local teardown only: never send a protocol request on a stale socket.
+    func invalidateContext() {
+        _context_lock.lock()
+        defer { _context_lock.unlock() }
+        guard let context else { return }
+        self.context = nil
+        smb2_destroy_context(context)
     }
 
     func withThreadSafeContext<R>(_ handler: (UnsafeMutablePointer<smb2_context>) throws -> R)
@@ -240,9 +242,9 @@ extension SMB2Client {
     func service(revents: Int32) throws {
         let result = smb2_service(context, revents)
         if result < 0 {
-            smb2_destroy_context(context)
-            context = nil
-            try POSIXError.throwIfError(result, description: errorString)
+            let description = errorString
+            invalidateContext()
+            try POSIXError.throwIfError(result, description: description)
         }
     }
 }
@@ -479,7 +481,14 @@ extension SMB2Client {
                 try handler(context, cb)
             }
             try POSIXError.throwIfError(result, description: errorString)
-            try wait_for_reply(&cb)
+            do {
+                try wait_for_reply(&cb)
+            } catch {
+                // A timeout can leave a PDU holding a pointer to cb. Destroy it
+                // while cb is still alive; a later request must not reuse it.
+                invalidateContext()
+                throw error
+            }
             let cbResult = cb.result
             
             try POSIXError.throwIfError(cbResult, description: errorString)
@@ -517,7 +526,14 @@ extension SMB2Client {
                 try handler(context, cb).unwrap()
             }
             smb2_queue_pdu(context, pdu)
-            try wait_for_reply(&cb)
+            do {
+                try wait_for_reply(&cb)
+            } catch {
+                // A timeout can leave a PDU holding a pointer to cb. Destroy it
+                // while cb is still alive; a later request must not reuse it.
+                invalidateContext()
+                throw error
+            }
 
             try cb.status.throwIfError()
             if let error = dataHandlerError { throw error }

@@ -320,6 +320,24 @@ public class SMB2Manager: NSObject, NSSecureCoding, Codable, NSCopying, CustomRe
         }
     }
 
+    /// Discard a stale session locally, after already queued operations finish.
+    /// Unlike disconnectShare, this does not send TREE_DISCONNECT or LOGOFF.
+    open func invalidateShare(completionHandler: SimpleCompletionHandler = nil) {
+        q.async(flags: .barrier) {
+            self.connectLock.lock()
+            self.client?.invalidateContext()
+            self.client = nil
+            self.connectLock.unlock()
+            completionHandler?(nil)
+        }
+    }
+
+    open func invalidateShare() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            invalidateShare(completionHandler: asyncHandler(continuation))
+        }
+    }
+
     /**
      Sends echo to server. Use it to prevent timeout or check connectivity.
 
