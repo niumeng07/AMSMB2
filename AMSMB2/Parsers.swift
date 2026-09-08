@@ -26,7 +26,7 @@ extension Array where Element == SMB2Share {
     init(_ client: SMB2Client, _ dataPtr: UnsafeMutableRawPointer?) throws {
         defer { smb2_free_data(client.context, dataPtr) }
         let result = try dataPtr.unwrap().assumingMemoryBound(to: srvsvc_NetrShareEnum_rep.self).pointee
-        self = Array(result.ses.ShareInfo.Level1)
+        self = Array(result.ses.ShareEnum.Level1)
     }
 
     init(_ ctr1: srvsvc_SHARE_INFO_1_CONTAINER) {
@@ -36,11 +36,12 @@ extension Array where Element == SMB2Share {
         }
         self = [srvsvc_SHARE_INFO_1](
             UnsafeBufferPointer(start: shareInfo, count: Int(ctr1.EntriesRead))
-        ).map {
-            SMB2Share(
-                name: .init(cString: $0.netname.utf8),
-                props: .init(rawValue: $0.type),
-                comment: .init(cString: $0.remark.utf8)
+        ).compactMap { entry in
+            guard let name = entry.netname else { return nil }
+            return SMB2Share(
+                name: .init(cString: name),
+                props: .init(rawValue: entry.type),
+                comment: entry.remark.map { String(cString: $0) } ?? ""
             )
         }
     }

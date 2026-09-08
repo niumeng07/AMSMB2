@@ -48,6 +48,9 @@ let package = Package(
             ],
             publicHeadersPath: "include",
             cSettings: [
+                // Internal DCE/RPC symbols are renamed per translation unit.
+                // Precompiled Clang modules would freeze the unprefixed declarations.
+                .unsafeFlags(["-fno-modules"]),
                 .headerSearchPath("include"),
                 .headerSearchPath("include/apple"),
                 .headerSearchPath("include/smb2"),
