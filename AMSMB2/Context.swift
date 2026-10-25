@@ -399,9 +399,9 @@ extension SMB2Client {
             self.continuation = continuation
         }
     }
-    
+
     private func wait(_ cb: inout CBData) async throws {
-        let startDate = Date()
+        // let startDate = Date()
         let source = switch try whichEvents() {
         case Int16(POLL_IN):
             DispatchSource.makeReadSource(fileDescriptor: fileDescriptor.rawValue)
@@ -415,6 +415,7 @@ extension SMB2Client {
         }
         
     }
+
     private func wait_for_reply(_ cb: inout CBData) throws {
         let startDate = Date()
         while !cb.isFinished {
